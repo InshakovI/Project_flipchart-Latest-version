@@ -1,0 +1,892 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Уиверситет НЛМК - доска тренера.</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f0f0f0;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+            overflow-x: hidden;
+            touch-action: none;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 20px;
+            background: white;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            z-index: 100;
+        }
+        h1 {
+            margin: 0;
+            color: #333;
+            font-size: 1.5rem;
+        }
+        .controls {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .controls button {
+            padding: 8px 15px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+        .controls button:hover {
+            background: #45a049;
+        }
+        .controls button.clear {
+            background: #f44336;
+        }
+        .controls button.clear:hover {
+            background: #d32f2f;
+        }
+        .controls button.toggle-draw {
+            background: #2196F3;
+        }
+        .controls button.toggle-draw:hover {
+            background: #0b7dda;
+        }
+        .controls button.toggle-eraser {
+            background: #9E9E9E;
+        }
+        .controls button.toggle-eraser:hover {
+            background: #757575;
+        }
+        .color-picker {
+            display: flex;
+            gap: 5px;
+            align-items: center;
+        }
+        .color-option {
+            width: 25px;
+            height: 25px;
+            border-radius: 50%;
+            cursor: pointer;
+            border: 2px solid transparent;
+        }
+        .color-option.selected {
+            border-color: #333;
+        }
+        .stickers-container {
+            position: relative;
+            width: 100%;
+            flex-grow: 1;
+            min-height: calc(100vh - 70px);
+            background: white;
+            touch-action: none;
+            overflow: hidden;
+        }
+        .sticker {
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            width: 200px;
+            min-height: 50px;
+            display: flex;
+            flex-direction: column;
+            position: absolute;
+            cursor: grab;
+            transition: transform 0.1s, box-shadow 0.2s;
+            touch-action: none;
+            user-select: none;
+            resize: none;
+            overflow: hidden;
+            transform-origin: center center;
+        }
+        .sticker.dragging {
+            cursor: grabbing;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+            z-index: 1000;
+            transform: scale(1.02);
+        }
+        .sticker.resizing {
+            cursor: nwse-resize;
+        }
+        .sticker-text {
+            white-space: pre-line;
+            word-break: break-word;
+            flex-grow: 1;
+            margin-bottom: 10px;
+            font-size: 14px;
+            line-height: 1.4;
+            overflow: visible;
+            min-height: 20px;
+        }
+        .sticker-time {
+            font-size: 12px;
+            color: #666;
+            margin-top: auto;
+            text-align: right;
+        }
+        .sticker-id {
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            background: rgba(0,0,0,0.1);
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 12px;
+            z-index: 101;
+        }
+        .sticker-close {
+            position: absolute;
+            top: 5px;
+            left: 5px;
+            background: rgba(0,0,0,0.1);
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 12px;
+            cursor: pointer;
+            z-index: 102;
+        }
+        .sticker-close:hover {
+            background: rgba(0,0,0,0.2);
+        }
+        .sticker-close:active {
+            background: rgba(0,0,0,0.3);
+            transform: scale(0.9);
+        }
+        .sticker-resize-handle {
+            position: absolute;
+            right: 5px;
+            bottom: 5px;
+            width: 20px;
+            height: 20px;
+            cursor: nwse-resize;
+            z-index: 102;
+        }
+        .team-number {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 80px;
+            font-weight: bold;
+            opacity: 0.7;
+            color: rgba(0, 0, 0, 0.3);
+            pointer-events: none;
+            z-index: 1;
+        }
+        .drawing-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 10;
+            pointer-events: none;
+        }
+        .drawing-active {
+            pointer-events: auto;
+        }
+        .pen-size-picker {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .pen-size {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #000;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Университет НЛМК. Флипчарт тренера.</h1>
+        <div class="controls">
+            <button id="toggle-draw-btn" class="toggle-draw">Рисовать</button>
+            <button id="toggle-eraser-btn" class="toggle-eraser">Ластик</button>
+            <div class="color-picker">
+                <div class="color-option selected" style="background: #000000;" data-color="#000000"></div>
+                <div class="color-option" style="background: #ff0000;" data-color="#ff0000"></div>
+                <div class="color-option" style="background: #0000ff;" data-color="#0000ff"></div>
+                <div class="color-option" style="background: #00ff00;" data-color="#00ff00"></div>
+            </div>
+            <div class="pen-size-picker">
+                <input type="range" id="pen-size" min="1" max="20" value="3">
+                <div class="pen-size" id="pen-size-preview"></div>
+            </div>
+            <button id="save-btn">Сохранить</button>
+            <button id="clear-btn" class="clear">Очистить</button>
+        </div>
+    </div>
+    
+    <div class="stickers-container" id="stickers-container">
+        <canvas id="drawing-canvas" class="drawing-canvas"></canvas>
+    </div>
+
+    <script>
+        // Объект для хранения позиций стикеров
+        let stickerPositions = {};
+        let activeSticker = null;
+        let startX, startY;
+        let isResizing = false;
+        let isDrawing = false;
+        let isPinching = false;
+        let lastX = 0;
+        let lastY = 0;
+        let initialDistance = 0;
+        let initialScale = 1;
+        let drawingCanvas, drawingCtx;
+        let currentColor = '#000000';
+        let currentPenSize = 3;
+        let isEraserMode = false;
+        let isDrawingMode = false;
+        let touchTimeout = null;
+        
+        // Инициализация canvas для рисования
+        function initDrawingCanvas() {
+            drawingCanvas = document.getElementById('drawing-canvas');
+            drawingCtx = drawingCanvas.getContext('2d');
+            
+            const container = document.getElementById('stickers-container');
+            drawingCanvas.width = container.offsetWidth;
+            drawingCanvas.height = container.offsetHeight;
+            
+            updatePenSettings();
+        }
+        
+        function updatePenSettings() {
+            if (isEraserMode) {
+                drawingCtx.globalCompositeOperation = 'destination-out';
+                drawingCtx.strokeStyle = 'rgba(0,0,0,1)';
+            } else {
+                drawingCtx.globalCompositeOperation = 'source-over';
+                drawingCtx.strokeStyle = currentColor;
+            }
+            
+            drawingCtx.lineWidth = currentPenSize;
+            drawingCtx.lineCap = 'round';
+            drawingCtx.lineJoin = 'round';
+            
+            document.getElementById('pen-size-preview').style.width = currentPenSize + 'px';
+            document.getElementById('pen-size-preview').style.height = currentPenSize + 'px';
+            document.getElementById('pen-size-preview').style.background = isEraserMode ? '#9E9E9E' : currentColor;
+        }
+        
+        // Обработчики для рисования
+        function setupDrawing() {
+            const container = document.getElementById('stickers-container');
+            
+            container.addEventListener('touchstart', handleTouchStart, { passive: false });
+            container.addEventListener('touchmove', handleTouchMove, { passive: false });
+            container.addEventListener('touchend', handleTouchEnd, { passive: false });
+            
+            container.addEventListener('mousedown', startDrawing);
+            container.addEventListener('mousemove', draw);
+            container.addEventListener('mouseup', stopDrawing);
+            container.addEventListener('mouseleave', stopDrawing);
+        }
+        
+        function startDrawing(e) {
+            if (!isDrawingMode && !isEraserMode) return;
+            
+            isDrawing = true;
+            const pos = getPosition(e);
+            lastX = pos.x;
+            lastY = pos.y;
+            
+            // Для ластика рисуем сразу точку
+            if (isEraserMode) {
+                drawingCtx.beginPath();
+                drawingCtx.arc(lastX, lastY, currentPenSize/2, 0, Math.PI*2);
+                drawingCtx.fill();
+            }
+            
+            e.preventDefault();
+        }
+        
+        function draw(e) {
+            if (!isDrawing || (!isDrawingMode && !isEraserMode)) return;
+            
+            const pos = getPosition(e);
+            
+            drawingCtx.beginPath();
+            drawingCtx.moveTo(lastX, lastY);
+            drawingCtx.lineTo(pos.x, pos.y);
+            drawingCtx.stroke();
+            
+            lastX = pos.x;
+            lastY = pos.y;
+            
+            e.preventDefault();
+        }
+        
+        function stopDrawing() {
+            isDrawing = false;
+        }
+        
+        function handleTouchStart(e) {
+            if (isDrawingMode || isEraserMode) {
+                if (e.touches.length === 1) {
+                    startDrawing(e);
+                }
+                return;
+            }
+            
+            if (e.touches.length === 2) {
+                // Начало зуммирования
+                isPinching = true;
+                const touch1 = e.touches[0];
+                const touch2 = e.touches[1];
+                initialDistance = Math.hypot(
+                    touch2.clientX - touch1.clientX,
+                    touch2.clientY - touch1.clientY
+                );
+                
+                if (activeSticker) {
+                    initialScale = parseFloat(activeSticker.dataset.scale) || 1;
+                }
+                
+                e.preventDefault();
+            } else if (e.touches.length === 1 && !isPinching) {
+                const touch = e.touches[0];
+                const target = document.elementFromPoint(touch.clientX, touch.clientY);
+                
+                // Увеличиваем время для обработки касания
+                clearTimeout(touchTimeout);
+                touchTimeout = setTimeout(() => {
+                    if (target && target.classList.contains('sticker-resize-handle')) {
+                        startResize(e);
+                    } else if (target && target.closest('.sticker')) {
+                        activeSticker = target.closest('.sticker');
+                        activeSticker.classList.add('dragging');
+                        
+                        const rect = activeSticker.getBoundingClientRect();
+                        startX = touch.clientX - rect.left;
+                        startY = touch.clientY - rect.top;
+                        
+                        e.preventDefault();
+                    }
+                }, 100); // Задержка 100мс для лучшего распознавания
+            }
+        }
+        
+        function handleTouchMove(e) {
+            if ((isDrawingMode || isEraserMode) && e.touches.length === 1) {
+                draw(e);
+                return;
+            }
+            
+            if (isPinching && e.touches.length === 2 && activeSticker) {
+                // Обработка зуммирования
+                const touch1 = e.touches[0];
+                const touch2 = e.touches[1];
+                const currentDistance = Math.hypot(
+                    touch2.clientX - touch1.clientX,
+                    touch2.clientY - touch1.clientY
+                );
+                
+                const scale = Math.max(0.5, Math.min(3, initialScale * (currentDistance / initialDistance)));
+                activeSticker.style.transform = `scale(${scale})`;
+                activeSticker.dataset.scale = scale;
+                
+                e.preventDefault();
+            } else if (!isPinching && e.touches.length === 1 && activeSticker) {
+                // Обработка перемещения
+                const touch = e.touches[0];
+                moveSticker(touch.clientX, touch.clientY);
+                e.preventDefault();
+            }
+        }
+        
+        function handleTouchEnd(e) {
+            clearTimeout(touchTimeout);
+            
+            if (isDrawingMode || isEraserMode) {
+                stopDrawing();
+                return;
+            }
+            
+            if (isPinching && e.touches.length < 2) {
+                isPinching = false;
+                if (activeSticker) {
+                    // Задержка сохранения позиции после зуммирования
+                    setTimeout(() => {
+                        saveStickerPosition(activeSticker);
+                    }, 500);
+                }
+            }
+            
+            if (!e.touches.length && activeSticker) {
+                activeSticker.classList.remove('dragging');
+                // Задержка сохранения позиции после перемещения
+                setTimeout(() => {
+                    saveStickerPosition(activeSticker);
+                    activeSticker = null;
+                }, 300);
+            }
+        }
+        
+        function getPosition(e) {
+            const container = document.getElementById('stickers-container');
+            const rect = container.getBoundingClientRect();
+            
+            if (e.touches) {
+                return {
+                    x: e.touches[0].clientX - rect.left,
+                    y: e.touches[0].clientY - rect.top
+                };
+            } else {
+                return {
+                    x: e.clientX - rect.left,
+                    y: e.clientY - rect.top
+                };
+            }
+        }
+        
+        function clearDrawing() {
+            drawingCtx.clearRect(0, 0, drawingCanvas.width, drawingCanvas.height);
+        }
+        
+        // Режим рисования
+        function toggleDrawingMode() {
+            if (isEraserMode) toggleEraserMode(); // Выключаем ластик если он был включен
+            
+            isDrawingMode = !isDrawingMode;
+            const btn = document.getElementById('toggle-draw-btn');
+            const canvas = document.getElementById('drawing-canvas');
+            
+            if (isDrawingMode) {
+                btn.textContent = 'Закончить рисование';
+                canvas.classList.add('drawing-active');
+            } else {
+                btn.textContent = 'Рисовать';
+                canvas.classList.remove('drawing-active');
+            }
+            
+            updatePenSettings();
+        }
+        
+        // Режим ластика
+        function toggleEraserMode() {
+            if (isDrawingMode) toggleDrawingMode(); // Выключаем рисование если оно было включено
+            
+            isEraserMode = !isEraserMode;
+            const btn = document.getElementById('toggle-eraser-btn');
+            const canvas = document.getElementById('drawing-canvas');
+            
+            if (isEraserMode) {
+                btn.textContent = 'Закончить ластик';
+                canvas.classList.add('drawing-active');
+            } else {
+                btn.textContent = 'Ластик';
+                canvas.classList.remove('drawing-active');
+            }
+            
+            updatePenSettings();
+        }
+        
+        // Функция для получения случайной позиции стикера
+        function getRandomStickerPosition() {
+            const container = document.getElementById('stickers-container');
+            const containerRect = container.getBoundingClientRect();
+            
+            // Размеры контейнера
+            const containerWidth = containerRect.width;
+            const containerHeight = containerRect.height;
+            
+            // Размеры стикера (примерные)
+            const stickerWidth = 200;
+            const stickerHeight = 150;
+            
+            // Отступы от краев
+            const margin = 20;
+            
+            // Случайные координаты с учетом отступов
+            const maxX = Math.max(0, containerWidth - stickerWidth - margin);
+            const maxY = Math.max(0, containerHeight - stickerHeight - margin);
+            
+            const randomX = Math.floor(Math.random() * maxX) + margin;
+            const randomY = Math.floor(Math.random() * maxY) + margin;
+            
+            return {
+                x: `${randomX}px`,
+                y: `${randomY}px`
+            };
+        }
+        
+        // Функция для сохранения начальной позиции на сервере
+        async function saveInitialPosition(stickerId, position) {
+            try {
+                await fetch('/api/save_position', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        id: stickerId,
+                        x: position.x,
+                        y: position.y,
+                        width: '200px',
+                        height: 'auto',
+                        scale: 1
+                    })
+                });
+            } catch (error) {
+                console.error('Ошибка сохранения начальной позиции:', error);
+            }
+        }
+        
+        async function loadStickers() {
+            try {
+                const response = await fetch('/api/stickers');
+                const stickers = await response.json();
+                renderStickers(stickers);
+            } catch (error) {
+                console.error('Ошибка загрузки стикеров:', error);
+            }
+        }
+        
+        function renderStickers(stickers) {
+            const container = document.getElementById('stickers-container');
+            
+            // Сохраняем текущие позиции перед обновлением
+            document.querySelectorAll('.sticker').forEach(sticker => {
+                const id = sticker.dataset.id;
+                stickerPositions[id] = {
+                    x: sticker.style.left,
+                    y: sticker.style.top,
+                    width: sticker.style.width,
+                    height: sticker.style.height,
+                    scale: sticker.dataset.scale || 1
+                };
+            });
+            
+            container.innerHTML = '';
+            container.appendChild(drawingCanvas);
+            
+            stickers.forEach(sticker => {
+                const stickerEl = document.createElement('div');
+                stickerEl.className = 'sticker';
+                stickerEl.dataset.id = sticker.id;
+                stickerEl.style.backgroundColor = sticker.color;
+                
+                // Восстанавливаем позицию и размер из данных сервера
+                if (sticker.x && sticker.y) {
+                    // Если позиция уже сохранена на сервере
+                    stickerEl.style.left = sticker.x;
+                    stickerEl.style.top = sticker.y;
+                    stickerEl.style.width = sticker.width || '200px';
+                    stickerEl.style.height = sticker.height || 'auto';
+                    stickerEl.dataset.scale = sticker.scale || 1;
+                    stickerEl.style.transform = `scale(${sticker.scale || 1})`;
+                } else {
+                    // Случайная позиция при первом отображении
+                    const randomPosition = getRandomStickerPosition();
+                    stickerEl.style.left = randomPosition.x;
+                    stickerEl.style.top = randomPosition.y;
+                    stickerEl.style.width = '200px';
+                    stickerEl.style.height = 'auto';
+                    stickerEl.dataset.scale = 1;
+                    
+                    // Сохраняем случайную позицию на сервере
+                    saveInitialPosition(sticker.id, randomPosition);
+                }
+                
+                // Добавляем номер команды
+                const teamNumber = document.createElement('div');
+                teamNumber.className = 'team-number';
+                teamNumber.textContent = sticker.color_number || '1';
+                stickerEl.appendChild(teamNumber);
+                
+                stickerEl.innerHTML += `
+                    <div class="sticker-close" data-id="${sticker.id}">×</div>
+                    <div class="sticker-id">${sticker.id}</div>
+                    <div class="sticker-text">${sticker.text.replace(/<br>/g, '\n')}</div>
+                    <div class="sticker-time">${sticker.timestamp}</div>
+                    <div class="sticker-resize-handle"></div>
+                `;
+                container.appendChild(stickerEl);
+                
+                // Автоматическое изменение высоты стикера под текст
+                autoResizeSticker(stickerEl);
+                
+                // Добавляем обработчики
+                setupStickerInteractions(stickerEl);
+                
+                // Обработчики для кнопки удаления
+                const closeBtn = stickerEl.querySelector('.sticker-close');
+                closeBtn.addEventListener('click', handleCloseSticker);
+                closeBtn.addEventListener('touchend', handleCloseSticker);
+            });
+        }
+        
+        // Автоматическое изменение высоты стикера
+        function autoResizeSticker(sticker) {
+            const textElement = sticker.querySelector('.sticker-text');
+            const minHeight = 50;
+            const padding = 30; // Отступы сверху и снизу
+            
+            // Вычисляем необходимую высоту
+            textElement.style.height = 'auto';
+            const requiredHeight = textElement.scrollHeight + padding;
+            
+            // Устанавливаем высоту
+            sticker.style.height = Math.max(minHeight, requiredHeight) + 'px';
+        }
+        
+        // Обработчик закрытия стикера
+        async function handleCloseSticker(e) {
+            e.stopPropagation();
+            e.preventDefault();
+            
+            const id = this.dataset.id;
+            if (confirm('Удалить этот стикер?')) {
+                try {
+                    const response = await fetch(`/api/delete/${id}`, { method: 'DELETE' });
+                    const result = await response.json();
+                    if (result.status === 'success') {
+                        delete stickerPositions[id];
+                        loadStickers();
+                    }
+                } catch (error) {
+                    console.error('Ошибка удаления:', error);
+                    alert('Ошибка при удалении стикера');
+                }
+            }
+        }
+        
+        function setupStickerInteractions(sticker) {
+            // Для мыши
+            sticker.addEventListener('mousedown', startDrag);
+            
+            // Для сенсорных устройств
+            sticker.addEventListener('touchstart', handleTouchStart, { passive: false });
+            
+            // Обработчик изменения размера
+            const resizeHandle = sticker.querySelector('.sticker-resize-handle');
+            resizeHandle.addEventListener('mousedown', startResize);
+            resizeHandle.addEventListener('touchstart', (e) => {
+                startResize(e);
+                e.preventDefault();
+            }, { passive: false });
+        }
+        
+        function startDrag(e) {
+            if (e.button !== 0 || isDrawingMode || isEraserMode) return; // Только левая кнопка мыши
+            
+            // Проверяем, не кликнули ли на элемент управления
+            if (e.target.classList.contains('sticker-close')) return;
+            if (e.target.classList.contains('sticker-resize-handle')) return;
+            
+            activeSticker = e.currentTarget;
+            activeSticker.classList.add('dragging');
+            
+            startX = e.clientX - activeSticker.offsetLeft;
+            startY = e.clientY - activeSticker.offsetTop;
+            
+            document.addEventListener('mousemove', drag);
+            document.addEventListener('mouseup', stopDrag);
+        }
+        
+        function startResize(e) {
+            if (isDrawingMode || isEraserMode) return;
+            
+            e.stopPropagation();
+            activeSticker = e.currentTarget.closest('.sticker');
+            activeSticker.classList.add('resizing');
+            isResizing = true;
+            
+            const startWidth = activeSticker.offsetWidth;
+            const startHeight = activeSticker.offsetHeight;
+            const startX = e.clientX || e.touches[0].clientX;
+            const startY = e.clientY || e.touches[0].clientY;
+            
+            function resize(e) {
+                if (!isResizing) return;
+                
+                const currentX = e.clientX || (e.touches && e.touches[0].clientX);
+                const currentY = e.clientY || (e.touches && e.touches[0].clientY);
+                
+                const newWidth = Math.max(100, startWidth + (currentX - startX));
+                const newHeight = Math.max(50, startHeight + (currentY - startY));
+                
+                activeSticker.style.width = newWidth + 'px';
+                activeSticker.style.height = newHeight + 'px';
+                
+                // Автоматически подгоняем высоту текста
+                const textElement = activeSticker.querySelector('.sticker-text');
+                textElement.style.height = 'auto';
+                textElement.style.height = (textElement.scrollHeight) + 'px';
+                
+                e.preventDefault();
+            }
+            
+            function stopResize() {
+                isResizing = false;
+                activeSticker.classList.remove('resizing');
+                document.removeEventListener('mousemove', resize);
+                document.removeEventListener('mouseup', stopResize);
+                document.removeEventListener('touchmove', resize);
+                document.removeEventListener('touchend', stopResize);
+                
+                if (activeSticker) {
+                    saveStickerPosition(activeSticker);
+                    activeSticker = null;
+                }
+            }
+            
+            document.addEventListener('mousemove', resize);
+            document.addEventListener('mouseup', stopResize);
+            document.addEventListener('touchmove', resize, { passive: false });
+            document.addEventListener('touchend', stopResize);
+            
+            e.preventDefault();
+        }
+        
+        function drag(e) {
+            if (!activeSticker) return;
+            
+            moveSticker(e.clientX, e.clientY);
+        }
+        
+        function moveSticker(clientX, clientY) {
+            const container = document.getElementById('stickers-container');
+            const containerRect = container.getBoundingClientRect();
+            
+            // Вычисляем новые координаты
+            let newX = clientX - startX;
+            let newY = clientY - startY;
+            
+            // Ограничиваем перемещение в пределах контейнера
+            const stickerWidth = activeSticker.offsetWidth;
+            const stickerHeight = activeSticker.offsetHeight;
+            
+            newX = Math.max(0, Math.min(containerRect.width - stickerWidth, newX));
+            newY = Math.max(0, Math.min(containerRect.height - stickerHeight, newY));
+            
+            activeSticker.style.left = newX + 'px';
+            activeSticker.style.top = newY + 'px';
+        }
+        
+        function stopDrag() {
+            if (activeSticker) {
+                activeSticker.classList.remove('dragging');
+                saveStickerPosition(activeSticker);
+                activeSticker = null;
+            }
+            
+            document.removeEventListener('mousemove', drag);
+            document.removeEventListener('mouseup', stopDrag);
+        }
+        
+        async function saveStickerPosition(sticker) {
+            const id = sticker.dataset.id;
+            const position = {
+                id: parseInt(id),
+                x: sticker.style.left,
+                y: sticker.style.top,
+                width: sticker.style.width,
+                height: sticker.style.height,
+                scale: parseFloat(sticker.dataset.scale) || 1
+            };
+            
+            try {
+                await fetch('/api/save_position', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(position)
+                });
+            } catch (error) {
+                console.error('Ошибка сохранения позиции:', error);
+            }
+        }
+        
+        async function clearAll() {
+            if (confirm('Очистить все стикеры и рисунки?')) {
+                try {
+                    const response = await fetch('/api/clear', { method: 'POST' });
+                    const result = await response.json();
+                    if (result.status === 'success') {
+                        stickerPositions = {};
+                        clearDrawing();
+                        loadStickers();
+                    }
+                } catch (error) {
+                    console.error('Ошибка очистки:', error);
+                    alert('Ошибка при очистке');
+                }
+            }
+        }
+        
+        async function saveToFile() {
+            try {
+                const response = await fetch('/api/save', { method: 'POST' });
+                const result = await response.json();
+                alert(`Сохранено в файл: ${result.filename}`);
+            } catch (error) {
+                console.error('Ошибка сохранения:', error);
+                alert('Ошибка при сохранении');
+            }
+        }
+        
+        // Инициализация
+        document.addEventListener('DOMContentLoaded', () => {
+            initDrawingCanvas();
+            setupDrawing();
+            loadStickers();
+            
+            // Обновление размера canvas при изменении размера окна
+            window.addEventListener('resize', () => {
+                const container = document.getElementById('stickers-container');
+                drawingCanvas.width = container.offsetWidth;
+                drawingCanvas.height = container.offsetHeight;
+                // Перерисовываем рисунок
+                // (здесь можно добавить сохранение и восстановление рисунка)
+            });
+            
+            // Кнопки управления
+            document.getElementById('clear-btn').addEventListener('click', clearAll);
+            document.getElementById('save-btn').addEventListener('click', saveToFile);
+            document.getElementById('toggle-draw-btn').addEventListener('click', toggleDrawingMode);
+            document.getElementById('toggle-eraser-btn').addEventListener('click', toggleEraserMode);
+            
+            // Выбор цвета
+            document.querySelectorAll('.color-option').forEach(option => {
+                option.addEventListener('click', () => {
+                    document.querySelectorAll('.color-option').forEach(opt => opt.classList.remove('selected'));
+                    option.classList.add('selected');
+                    currentColor = option.dataset.color;
+                    updatePenSettings();
+                });
+            });
+            
+            // Размер пера
+            document.getElementById('pen-size').addEventListener('input', (e) => {
+                currentPenSize = parseInt(e.target.value);
+                updatePenSettings();
+            });
+            
+            // Обновление стикеров каждые 5 секунд
+            setInterval(loadStickers, 5000);
+        });
+    </script>
+</body>
+</html>
